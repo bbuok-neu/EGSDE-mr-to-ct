@@ -17,6 +17,8 @@ def run_egsde(task):
         from profiles.wild2dog.args import argsall
     if task == 'male2female':
         from profiles.male2female.args import argsall
+    if task == 'mr2ct':
+        from profiles.mr2ct.args import argsall
 
     # args
     args = argsall

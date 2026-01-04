@@ -70,6 +70,71 @@ Other default args is in create_argparser(), where ```pretrained_model``` is the
 If you want to train domain-specific extractor from scratch, just set ```pretrained``` False and you may need to increase the training iterations.
 ## Re-training Score-based Diffusion Model
 The code for re-training score-based diffusion model is available at [guided-diffusion](https://github.com/openai/guided-diffusion) or [ddim](https://github.com/ermongroup/ddim).
+
+## MR-to-CT Medical Image Synthesis
+
+This section describes the steps to implement MR-to-CT medical image synthesis using EGSDE.
+
+### Prerequisites
+- A pre-trained unconditional CT synthesis diffusion model (e.g., trained with ddim)
+- MR and CT paired or unpaired datasets
+
+### Step 1: Prepare Your Dataset
+Organize your data as follows:
+```
+data/
+└── mr2ct/
+    ├── train/
+    │   ├── mr/          # MR training images
+    │   └── ct/          # CT training images
+    └── test/
+        └── mr/          # MR test images for translation
+```
+Note: Images should be preprocessed to 256x256 resolution (or modify config accordingly).
+
+### Step 2: Prepare Pretrained CT Diffusion Model
+Place your pre-trained CT diffusion model checkpoint in `pretrained_model/`:
+```
+pretrained_model/
+└── ct_ddpm.pth          # Your DDIM-trained CT model
+```
+The model should be compatible with the DDPM architecture in `models/ddpm.py`. If trained with ddim library, set `diffusionmodel = 'DDPM'` in the config.
+
+### Step 3: Train Domain-Specific Extractor (DSE)
+Train a classifier to distinguish MR from CT images:
+```bash
+# Modify run_train_dse.py to set dataset = 'mr2ct'
+$ python run_train_dse.py
+```
+The DSE will be saved to `runs/mr2ct/dse/`. After training, copy it to:
+```
+pretrained_model/
+└── mr2ct_dse.pt
+```
+
+### Step 4: Run EGSDE for MR-to-CT Translation
+```bash
+# Modify run_EGSDE.py to set task = 'mr2ct'
+$ python run_EGSDE.py
+```
+The translated CT images will be saved in `runs/mr2ct/`.
+
+### Configuration Parameters
+Edit `profiles/mr2ct/args.py` to adjust:
+- `testdata_path`: Path to test MR images
+- `ckpt`: Path to CT diffusion model checkpoint
+- `dsepath`: Path to trained DSE model
+- `t`: Initial noise level (default: 500)
+- `ls`: Weight for domain-specific energy (default: 500.0)
+- `li`: Weight for domain-independent energy (default: 2.0)
+- `batch_size`: Batch size for inference
+
+### Key Hyperparameters for Medical Images
+For medical image synthesis, you may need to tune:
+- **t (initial time)**: Controls how much noise is added. Lower values preserve more structure.
+- **ls (domain-specific weight)**: Higher values push toward CT appearance.
+- **li (domain-independent weight)**: Higher values preserve anatomical structure.
+
 ## References
 If you find this repository helpful, please cite as:
 ```

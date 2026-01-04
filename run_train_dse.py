@@ -220,5 +220,9 @@ if __name__ == "__main__":
         args.data_path = ['data/afhq/train/cat','data/afhq/train/wild', 'data/afhq/train/dog']
         args.num_class = 3
         args.iterations = 10000
+    if dataset == 'mr2ct':
+        args.data_path = ['data/mr2ct/train/mr', 'data/mr2ct/train/ct']
+        args.num_class = 2
+        args.iterations = 5000
     main(args)
 
