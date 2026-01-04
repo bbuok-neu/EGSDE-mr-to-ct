@@ -113,6 +113,22 @@ class EGSDE(object):
         elif args.diffusionmodel == 'DDPM':
             model = Model(config)
             states = torch.load(self.args.ckpt)
+            # Handle different checkpoint formats from ddim library
+            if isinstance(states, list):
+                # ddim saves as [model_state_dict, ema_state_dict, optimizer_state_dict, ...]
+                # Use EMA weights if available (index 0 is model, index 1 is usually EMA)
+                if len(states) >= 2 and isinstance(states[1], dict):
+                    states = states[1]  # Use EMA weights
+                else:
+                    states = states[0]  # Use model weights
+            elif isinstance(states, dict):
+                # Handle dict format with 'state_dict', 'ema', or 'model' keys
+                if 'ema' in states:
+                    states = states['ema']
+                elif 'state_dict' in states:
+                    states = states['state_dict']
+                elif 'model' in states:
+                    states = states['model']
             model = model.to(self.device)
             model = torch.nn.DataParallel(model)
             model.load_state_dict(states, strict=True)
@@ -133,8 +149,16 @@ class EGSDE(object):
                          classifier_pool=config.dse.classifier_pool,
                          phase=args.phase,
                          in_channels=dse_in_channels)
-        states = torch.load(args.dsepath)
-        dse.load_state_dict(states)
+        dse_states = torch.load(args.dsepath)
+        # Handle different checkpoint formats
+        if isinstance(dse_states, list):
+            dse_states = dse_states[0]
+        elif isinstance(dse_states, dict):
+            if 'state_dict' in dse_states:
+                dse_states = dse_states['state_dict']
+            elif 'model' in dse_states:
+                dse_states = dse_states['model']
+        dse.load_state_dict(dse_states)
         dse.to(self.device)
         dse = torch.nn.DataParallel(dse)
         dse.eval()
