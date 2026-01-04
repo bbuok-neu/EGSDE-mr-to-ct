@@ -30,23 +30,27 @@ def make_dataset(dir, max_dataset_size=float("inf")):
     return images[:min(max_dataset_size, len(images))]
 
 class basedataset(torch.utils.data.Dataset):
-    def __init__(self,path,transform):
+    def __init__(self,path,transform, grayscale=False):
         self.paths = sorted(make_dataset(path))
         self.size = len(self.paths)
         self.transform = transform
+        self.grayscale = grayscale
     def __len__(self):
         return self.size
 
     def __getitem__(self, index):
         path = self.paths[index]
-        img = Image.open(path).convert('RGB')
+        if self.grayscale:
+            img = Image.open(path).convert('L')
+        else:
+            img = Image.open(path).convert('RGB')
 
         if self.transform is not None:
             img = self.transform(img)
         return img
 
 class namedataset(torch.utils.data.Dataset):
-    def __init__(self,path,transform):
+    def __init__(self,path,transform, grayscale=False):
         #align multi-domain
         if isinstance(path, list):
             self.paths = []
@@ -57,18 +61,22 @@ class namedataset(torch.utils.data.Dataset):
             self.paths = sorted(make_dataset(path))
         self.size = len(self.paths)
         self.transform = transform
+        self.grayscale = grayscale
     def __len__(self):
         return self.size
 
     def __getitem__(self, index):
         path = self.paths[index]
         name = path.split('/')[-1]
-        img = Image.open(path).convert('RGB')
+        if self.grayscale:
+            img = Image.open(path).convert('L')
+        else:
+            img = Image.open(path).convert('RGB')
         img = self.transform(img)
         return img,name
 
 class labeldataset(torch.utils.data.Dataset):
-    def __init__(self,paths,transform):
+    def __init__(self,paths,transform, grayscale=False):
         self.paths = []
         label = []
         for domain_i in range(len(paths)):
@@ -79,13 +87,17 @@ class labeldataset(torch.utils.data.Dataset):
         self.label = torch.cat(label)
         self.size = len(self.paths)
         self.transform = transform
+        self.grayscale = grayscale
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, index):
         path = self.paths[index]
-        img = Image.open(path).convert('RGB')
+        if self.grayscale:
+            img = Image.open(path).convert('L')
+        else:
+            img = Image.open(path).convert('RGB')
         label = self.label[index]
         if self.transform is not None:
             img = self.transform(img)

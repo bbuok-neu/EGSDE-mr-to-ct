@@ -121,6 +121,7 @@ class EGSDE(object):
             raise ValueError(f"unsupported diffusion model")
 
         #load domain-specific feature extractor
+        dse_in_channels = getattr(config.dse, 'in_channels', 3)
         dse = create_dse(image_size=config.data.image_size,
                          num_class=config.dse.num_class,
                          classifier_use_fp16=config.dse.classifier_use_fp16,
@@ -130,7 +131,8 @@ class EGSDE(object):
                          classifier_use_scale_shift_norm=config.dse.classifier_use_scale_shift_norm,
                          classifier_resblock_updown=config.dse.classifier_resblock_updown,
                          classifier_pool=config.dse.classifier_pool,
-                         phase=args.phase)
+                         phase=args.phase,
+                         in_channels=dse_in_channels)
         states = torch.load(args.dsepath)
         dse.load_state_dict(states)
         dse.to(self.device)
@@ -138,15 +140,17 @@ class EGSDE(object):
         dse.eval()
 
         #load domain-independent feature extractor
-        shape = (args.batch_size, 3, config.data.image_size, config.data.image_size)
+        num_channels = config.data.channels
+        shape = (args.batch_size, num_channels, config.data.image_size, config.data.image_size)
         shape_d = (
-            args.batch_size, 3, int(config.data.image_size / args.down_N), int(config.data.image_size / args.down_N))
+            args.batch_size, num_channels, int(config.data.image_size / args.down_N), int(config.data.image_size / args.down_N))
         down = Resizer(shape, 1 / args.down_N).to(self.device)
         up = Resizer(shape_d, args.down_N).to(self.device)
         die = (down, up)
 
         #create dataset
-        dataset = get_dataset(phase=args.phase,image_size= config.data.image_size, data_path = args.testdata_path)
+        grayscale = (num_channels == 1)
+        dataset = get_dataset(phase=args.phase,image_size= config.data.image_size, data_path = args.testdata_path, grayscale=grayscale)
         data_loader = data.DataLoader(
             dataset,
             batch_size=args.batch_size,

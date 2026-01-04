@@ -71,6 +71,7 @@ def create_dse(
     classifier_resblock_updown,
     classifier_pool,
     phase,
+    in_channels=3,
 ):
     if image_size == 512:
         channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
@@ -90,7 +91,7 @@ def create_dse(
     if phase == 'test':
         return DSE_inference(
             image_size=image_size,
-            in_channels=3,
+            in_channels=in_channels,
             model_channels=classifier_width,
             out_channels=num_class,
             num_res_blocks=classifier_depth,
@@ -106,7 +107,7 @@ def create_dse(
     elif phase == 'train':
         return DSE_train(
             image_size=image_size,
-            in_channels=3,
+            in_channels=in_channels,
             model_channels=classifier_width,
             out_channels=num_class,
             num_res_blocks=classifier_depth,
@@ -179,6 +180,7 @@ def create_DSE_and_diffusion(
     predict_xstart,
     rescale_timesteps,
     rescale_learned_sigmas,
+    in_channels=3,
 ):
     classifier = create_dse(
         image_size,
@@ -191,6 +193,7 @@ def create_DSE_and_diffusion(
         classifier_resblock_updown,
         classifier_pool,
         phase='train',
+        in_channels=in_channels,
     )
     diffusion = create_gaussian_diffusion(
         steps=diffusion_steps,
@@ -244,6 +247,7 @@ def classifier_defaults():
         classifier_resblock_updown=True,
         classifier_pool="attention",
         num_class=2,
+        in_channels=3,
     )
 
 def diffusion_defaults():
