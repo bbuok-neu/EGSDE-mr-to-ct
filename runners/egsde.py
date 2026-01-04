@@ -115,12 +115,26 @@ class EGSDE(object):
             states = torch.load(self.args.ckpt)
             # Handle different checkpoint formats from ddim library
             if isinstance(states, list):
-                # ddim saves as [model_state_dict, ema_state_dict, optimizer_state_dict, ...]
-                # Use EMA weights if available (index 0 is model, index 1 is usually EMA)
-                if len(states) >= 2 and isinstance(states[1], dict):
-                    states = states[1]  # Use EMA weights
-                else:
-                    states = states[0]  # Use model weights
+                # ddim saves as list, find the correct state_dict by checking for model keys
+                model_state = None
+                for i, state in enumerate(states):
+                    if isinstance(state, dict):
+                        # Check if this looks like a model state_dict (has conv/norm weights, not optimizer keys)
+                        keys = list(state.keys())
+                        if keys and not any(k in ['state', 'param_groups'] for k in keys):
+                            # Check for typical model keys
+                            if any('conv' in k or 'norm' in k or 'temb' in k or 'down' in k or 'up' in k for k in keys):
+                                model_state = state
+                                break
+                if model_state is None and len(states) > 0:
+                    # Fallback to first dict that's not an optimizer
+                    for state in states:
+                        if isinstance(state, dict) and 'param_groups' not in state:
+                            model_state = state
+                            break
+                if model_state is None:
+                    model_state = states[0]  # Last resort fallback
+                states = model_state
             elif isinstance(states, dict):
                 # Handle dict format with 'state_dict', 'ema', or 'model' keys
                 if 'ema' in states:
@@ -129,8 +143,29 @@ class EGSDE(object):
                     states = states['state_dict']
                 elif 'model' in states:
                     states = states['model']
+                # Also handle if the dict itself has optimizer keys at top level
+                elif 'param_groups' in states:
+                    raise ValueError("Checkpoint appears to be an optimizer state, not a model state")
+            
             model = model.to(self.device)
             model = torch.nn.DataParallel(model)
+            
+            # Handle module. prefix mismatch
+            # If checkpoint has module. prefix but model doesn't (or vice versa), fix it
+            model_keys = set(model.state_dict().keys())
+            state_keys = set(states.keys())
+            
+            if len(model_keys) > 0 and len(state_keys) > 0:
+                sample_model_key = next(iter(model_keys))
+                sample_state_key = next(iter(state_keys))
+                
+                # Model expects module. prefix but state doesn't have it
+                if sample_model_key.startswith('module.') and not sample_state_key.startswith('module.'):
+                    states = {'module.' + k: v for k, v in states.items()}
+                # Model doesn't expect module. prefix but state has it
+                elif not sample_model_key.startswith('module.') and sample_state_key.startswith('module.'):
+                    states = {k.replace('module.', '', 1): v for k, v in states.items()}
+            
             model.load_state_dict(states, strict=True)
             model.eval()
         else:
