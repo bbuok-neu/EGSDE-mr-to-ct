@@ -3,16 +3,16 @@ import torchvision.transforms as transforms
 from .basedataset import namedataset,labeldataset
 from PIL import Image
 
-def get_dataset(phase,image_size,data_path, grayscale=False):
+def get_dataset(phase, image_size, data_path, grayscale=False):
     train_transform = transforms.Compose(
         [
-            transforms.Resize((image_size, image_size),interpolation=Image.BICUBIC),
+            transforms.Resize((image_size, image_size), interpolation=Image.BICUBIC),
             transforms.RandomHorizontalFlip(p=0.5) if not grayscale else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
         ]
     )
     test_transform = transforms.Compose(
-        [transforms.Resize((image_size, image_size),interpolation=Image.BICUBIC), transforms.ToTensor()]
+        [transforms.Resize((image_size, image_size), interpolation=Image.BICUBIC), transforms.ToTensor()]
     )
     if phase == 'train':
         dataset = labeldataset(
@@ -36,12 +36,12 @@ def inverse_rescale(X):
     X = (X + 1.0) / 2.0
     return torch.clamp(X, 0.0, 1.0)
 
-def imageresize2tensor(path,image_size, grayscale=False):
+def imageresize2tensor(path, image_size, grayscale=False):
     img = Image.open(path)
     if grayscale:
         img = img.convert('L')
     convert = transforms.Compose(
-        [transforms.Resize((image_size, image_size),interpolation=Image.BICUBIC), transforms.ToTensor()]
+        [transforms.Resize((image_size, image_size), interpolation=Image.BICUBIC), transforms.ToTensor()]
     )
     return convert(img)
 

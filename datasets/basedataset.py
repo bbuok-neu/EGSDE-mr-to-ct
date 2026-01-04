@@ -30,7 +30,7 @@ def make_dataset(dir, max_dataset_size=float("inf")):
     return images[:min(max_dataset_size, len(images))]
 
 class basedataset(torch.utils.data.Dataset):
-    def __init__(self,path,transform, grayscale=False):
+    def __init__(self, path, transform, grayscale=False):
         self.paths = sorted(make_dataset(path))
         self.size = len(self.paths)
         self.transform = transform
@@ -50,7 +50,7 @@ class basedataset(torch.utils.data.Dataset):
         return img
 
 class namedataset(torch.utils.data.Dataset):
-    def __init__(self,path,transform, grayscale=False):
+    def __init__(self, path, transform, grayscale=False):
         #align multi-domain
         if isinstance(path, list):
             self.paths = []
@@ -76,7 +76,7 @@ class namedataset(torch.utils.data.Dataset):
         return img,name
 
 class labeldataset(torch.utils.data.Dataset):
-    def __init__(self,paths,transform, grayscale=False):
+    def __init__(self, paths, transform, grayscale=False):
         self.paths = []
         label = []
         for domain_i in range(len(paths)):
