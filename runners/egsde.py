@@ -113,14 +113,66 @@ class EGSDE(object):
         elif args.diffusionmodel == 'DDPM':
             model = Model(config)
             states = torch.load(self.args.ckpt)
+            # Handle different checkpoint formats from ddim library
+            if isinstance(states, list):
+                # ddim saves as list, find the correct state_dict by checking for model keys
+                model_state = None
+                for i, state in enumerate(states):
+                    if isinstance(state, dict):
+                        # Check if this looks like a model state_dict (has conv/norm weights, not optimizer keys)
+                        keys = list(state.keys())
+                        if keys and not any(k in ['state', 'param_groups'] for k in keys):
+                            # Check for typical model keys
+                            if any('conv' in k or 'norm' in k or 'temb' in k or 'down' in k or 'up' in k for k in keys):
+                                model_state = state
+                                break
+                if model_state is None and len(states) > 0:
+                    # Fallback to first dict that's not an optimizer
+                    for state in states:
+                        if isinstance(state, dict) and 'param_groups' not in state:
+                            model_state = state
+                            break
+                if model_state is None:
+                    model_state = states[0]  # Last resort fallback
+                states = model_state
+            elif isinstance(states, dict):
+                # Handle dict format with 'state_dict', 'ema', or 'model' keys
+                if 'ema' in states:
+                    states = states['ema']
+                elif 'state_dict' in states:
+                    states = states['state_dict']
+                elif 'model' in states:
+                    states = states['model']
+                # Also handle if the dict itself has optimizer keys at top level
+                elif 'param_groups' in states:
+                    raise ValueError("Checkpoint appears to be an optimizer state, not a model state")
+            
             model = model.to(self.device)
             model = torch.nn.DataParallel(model)
+            
+            # Handle module. prefix mismatch
+            # If checkpoint has module. prefix but model doesn't (or vice versa), fix it
+            model_keys = set(model.state_dict().keys())
+            state_keys = set(states.keys())
+            
+            if len(model_keys) > 0 and len(state_keys) > 0:
+                sample_model_key = next(iter(model_keys))
+                sample_state_key = next(iter(state_keys))
+                
+                # Model expects module. prefix but state doesn't have it
+                if sample_model_key.startswith('module.') and not sample_state_key.startswith('module.'):
+                    states = {'module.' + k: v for k, v in states.items()}
+                # Model doesn't expect module. prefix but state has it
+                elif not sample_model_key.startswith('module.') and sample_state_key.startswith('module.'):
+                    states = {k.replace('module.', '', 1): v for k, v in states.items()}
+            
             model.load_state_dict(states, strict=True)
             model.eval()
         else:
             raise ValueError(f"unsupported diffusion model")
 
         #load domain-specific feature extractor
+        dse_in_channels = getattr(config.dse, 'in_channels', 3)
         dse = create_dse(image_size=config.data.image_size,
                          num_class=config.dse.num_class,
                          classifier_use_fp16=config.dse.classifier_use_fp16,
@@ -130,23 +182,34 @@ class EGSDE(object):
                          classifier_use_scale_shift_norm=config.dse.classifier_use_scale_shift_norm,
                          classifier_resblock_updown=config.dse.classifier_resblock_updown,
                          classifier_pool=config.dse.classifier_pool,
-                         phase=args.phase)
-        states = torch.load(args.dsepath)
-        dse.load_state_dict(states)
+                         phase=args.phase,
+                         in_channels=dse_in_channels)
+        dse_states = torch.load(args.dsepath)
+        # Handle different checkpoint formats
+        if isinstance(dse_states, list):
+            dse_states = dse_states[0]
+        elif isinstance(dse_states, dict):
+            if 'state_dict' in dse_states:
+                dse_states = dse_states['state_dict']
+            elif 'model' in dse_states:
+                dse_states = dse_states['model']
+        dse.load_state_dict(dse_states)
         dse.to(self.device)
         dse = torch.nn.DataParallel(dse)
         dse.eval()
 
         #load domain-independent feature extractor
-        shape = (args.batch_size, 3, config.data.image_size, config.data.image_size)
+        num_channels = config.data.channels
+        shape = (args.batch_size, num_channels, config.data.image_size, config.data.image_size)
         shape_d = (
-            args.batch_size, 3, int(config.data.image_size / args.down_N), int(config.data.image_size / args.down_N))
+            args.batch_size, num_channels, int(config.data.image_size / args.down_N), int(config.data.image_size / args.down_N))
         down = Resizer(shape, 1 / args.down_N).to(self.device)
         up = Resizer(shape_d, args.down_N).to(self.device)
         die = (down, up)
 
         #create dataset
-        dataset = get_dataset(phase=args.phase,image_size= config.data.image_size, data_path = args.testdata_path)
+        grayscale = (num_channels == 1)
+        dataset = get_dataset(phase=args.phase,image_size= config.data.image_size, data_path = args.testdata_path, grayscale=grayscale)
         data_loader = data.DataLoader(
             dataset,
             batch_size=args.batch_size,

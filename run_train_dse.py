@@ -58,7 +58,7 @@ def main(args):
 
     model = torch.nn.DataParallel(model)
 
-    dataset = get_dataset(phase=args.phase, image_size=args.image_size, data_path=args.data_path)
+    dataset = get_dataset(phase=args.phase, image_size=args.image_size, data_path=args.data_path, grayscale=args.grayscale)
     import torch.utils.data as data
     data = data.DataLoader(
         dataset,
@@ -188,7 +188,9 @@ def create_argparser():
         log_interval=10,
         eval_interval=5,
         save_interval=500,
-        phase = 'train'
+        phase = 'train',
+        grayscale = False,
+        in_channels = 3,
     )
     defaults.update(classifier_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
@@ -220,5 +222,13 @@ if __name__ == "__main__":
         args.data_path = ['data/afhq/train/cat','data/afhq/train/wild', 'data/afhq/train/dog']
         args.num_class = 3
         args.iterations = 10000
+    if dataset == 'mr2ct':
+        args.data_path = ['data/mr2ct/train/mr', 'data/mr2ct/train/ct']
+        args.num_class = 2
+        args.iterations = 5000
+        args.grayscale = True
+        args.in_channels = 1
+        # Don't use pretrained weights for single-channel medical images
+        args.pretrained = False
     main(args)
 

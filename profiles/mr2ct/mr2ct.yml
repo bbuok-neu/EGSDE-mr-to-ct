@@ -1,0 +1,41 @@
+data:
+    dataset: "mr2ct"
+    image_size: 256
+    channels: 1
+    logit_transform: false
+    uniform_dequantization: false
+    gaussian_dequantization: false
+    random_flip: false
+    rescaled: true
+    num_workers: 4
+
+model:
+    type: "simple"
+    in_channels: 1
+    out_ch: 1
+    ch: 128
+    ch_mult: [1, 1, 2, 2, 4, 4]
+    num_res_blocks: 2
+    attn_resolutions: [16, ]
+    dropout: 0.1
+    var_type: fixedlarge
+    ema_rate: 0.9999
+    ema: True
+    resamp_with_conv: True
+
+diffusion:
+    beta_schedule: linear
+    beta_start: 0.0001
+    beta_end: 0.02
+    num_diffusion_timesteps: 1000
+
+dse:
+    num_class : 2
+    in_channels: 1
+    classifier_use_fp16: False
+    classifier_width : 128
+    classifier_depth : 2
+    classifier_attention_resolutions: '32,16,8'
+    classifier_use_scale_shift_norm: True
+    classifier_resblock_updown: True
+    classifier_pool: 'attention'

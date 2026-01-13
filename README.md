@@ -70,6 +70,109 @@ Other default args is in create_argparser(), where ```pretrained_model``` is the
 If you want to train domain-specific extractor from scratch, just set ```pretrained``` False and you may need to increase the training iterations.
 ## Re-training Score-based Diffusion Model
 The code for re-training score-based diffusion model is available at [guided-diffusion](https://github.com/openai/guided-diffusion) or [ddim](https://github.com/ermongroup/ddim).
+
+## MR-to-CT Medical Image Synthesis
+
+This section describes the steps to implement MR-to-CT medical image synthesis using EGSDE.
+
+### Features
+- **Single-channel (grayscale) support**: Optimized for medical imaging modalities
+- **Few-shot learning**: Only requires 2% of MR images for DSE training
+- **256x256 resolution**: Compatible with standard medical image processing
+- **JPG format support**: Works with common image formats
+
+### Prerequisites
+- A pre-trained unconditional CT synthesis diffusion model (trained with ddim, single-channel)
+- MR and CT image datasets (grayscale, JPG format recommended)
+
+### Step 1: Prepare Your Dataset with Few-Shot Sampling
+
+Use the provided script to prepare training data with few-shot sampling (2% MR + 100% CT):
+
+```bash
+# Prepare few-shot training data
+python prepare_fewshot_data.py \
+    --mr_dir /path/to/your/mr_images \
+    --ct_dir /path/to/your/ct_images \
+    --output_dir data/mr2ct/train \
+    --mr_ratio 0.02
+
+# Copy test MR images
+cp -r /path/to/test/mr_images/* data/mr2ct/test/mr/
+```
+
+This creates the following structure:
+```
+data/
+└── mr2ct/
+    ├── train/
+    │   ├── mr/          # 2% randomly sampled MR images for DSE training
+    │   └── ct/          # All CT images for DSE training
+    └── test/
+        └── mr/          # MR test images for translation
+```
+
+**Note**: 
+- Images will be automatically resized to 256x256 during training/inference
+- Images are read as grayscale (single-channel) for medical image compatibility
+- Supported formats: JPG, JPEG, PNG, BMP, TIF, TIFF
+
+### Step 2: Prepare Pretrained CT Diffusion Model
+Place your pre-trained CT diffusion model checkpoint in `pretrained_model/`:
+```
+pretrained_model/
+└── ct_ddpm.pth          # Your DDIM-trained CT model (single-channel)
+```
+
+The model configuration should match:
+- `in_channels: 1` (single-channel/grayscale)
+- `image_size: 256`
+- `var_type: fixedlarge`
+- Compatible with the DDPM architecture in `models/ddpm.py`
+
+### Step 3: Train Domain-Specific Extractor (DSE)
+Train a classifier to distinguish MR from CT images:
+```bash
+# Modify run_train_dse.py to set dataset = 'mr2ct'
+$ python run_train_dse.py
+```
+The DSE will be saved to `runs/mr2ct/dse/`. After training, copy it to:
+```
+pretrained_model/
+└── mr2ct_dse.pt
+```
+
+**Note**: For single-channel medical images, pretrained ImageNet weights are not used. The model trains from scratch with your MR/CT data.
+
+### Step 4: Run EGSDE for MR-to-CT Translation
+```bash
+# Modify run_EGSDE.py to set task = 'mr2ct'
+$ python run_EGSDE.py
+```
+The translated CT images will be saved in `runs/mr2ct/`.
+
+### Configuration Parameters
+Edit `profiles/mr2ct/args.py` to adjust:
+- `testdata_path`: Path to test MR images
+- `ckpt`: Path to CT diffusion model checkpoint
+- `dsepath`: Path to trained DSE model
+- `t`: Initial noise level (default: 500)
+- `ls`: Weight for domain-specific energy (default: 500.0)
+- `li`: Weight for domain-independent energy (default: 2.0)
+- `batch_size`: Batch size for inference
+
+The model configuration in `profiles/mr2ct/mr2ct.yml` is pre-configured for:
+- Single-channel (grayscale) images
+- 256x256 resolution
+- `var_type: fixedlarge` (matching the ddim model)
+- No random flip (appropriate for medical images)
+
+### Key Hyperparameters for Medical Images
+For medical image synthesis, you may need to tune:
+- **t (initial time)**: Controls how much noise is added. Lower values preserve more structure.
+- **ls (domain-specific weight)**: Higher values push toward CT appearance.
+- **li (domain-independent weight)**: Higher values preserve anatomical structure.
+
 ## References
 If you find this repository helpful, please cite as:
 ```
